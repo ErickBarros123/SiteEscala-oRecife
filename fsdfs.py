@@ -3,7 +3,7 @@ import requests
 import pandas as pd
 import io
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
 from supabase import create_client, Client
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
@@ -22,53 +22,50 @@ periodos_map = {
     "49": "4"   # 02h às 08h
 }
 
-dias_retroativos = 60
+# Pega apenas a data de hoje
+data_alvo = datetime.now()
+data_formatada = data_alvo.strftime("%d/%m/%Y")
+data_iso = data_alvo.strftime("%Y-%m-%d")
 
-for i in range(dias_retroativos):
-    data_alvo = datetime.now() - timedelta(days=i)
-    data_formatada = data_alvo.strftime("%d/%m/%Y")
-    data_iso = data_alvo.strftime("%Y-%m-%d")
+print(f"\n📅 Coletando escala do dia atual: {data_formatada}")
+
+for periodo, turno_num in periodos_map.items():
+    dados_post = {
+        "categoria": "01",
+        "data": data_formatada, 
+        "periodo": periodo
+    }
     
-    print(f"\n📅 Processando data: {data_formatada} ({i+1}/{dias_retroativos})")
+    try:
+        resposta = requests.post(url_ogmo, data=dados_post, timeout=10)
 
-    for periodo, turno_num in periodos_map.items():
-        dados_post = {
-            "categoria": "01",
-            "data": data_formatada, 
-            "periodo": periodo
-        }
-        
-        try:
-            resposta = requests.post(url_ogmo, data=dados_post, timeout=10)
-
-            if resposta.status_code == 200:
-                html_io = io.StringIO(resposta.text)
-                tabelas = pd.read_html(html_io)
+        if resposta.status_code == 200:
+            html_io = io.StringIO(resposta.text)
+            tabelas = pd.read_html(html_io)
+            
+            if tabelas:
+                df = tabelas[0].fillna("")
+                registros_formatados = []
                 
-                if tabelas:
-                    df = tabelas[0].fillna("")
-                    registros_formatados = []
+                for _, row in df.iterrows():
+                    row_dict = row.to_dict()
+                    registro_limpo = {
+                        "data": data_iso,
+                        "turno": turno_num,
+                        "cais": str(row_dict.get("Cais", row_dict.get("CAIS", row_dict.get(0, "-")))),
+                        "navio": str(row_dict.get("Navio", row_dict.get("NAVIO", row_dict.get(1, "-")))),
+                        "operador": str(row_dict.get("Operador", row_dict.get("OPERADOR", row_dict.get(2, "-"))))
+                    }
                     
-                    for _, row in df.iterrows():
-                        row_dict = row.to_dict()
-                        registro_limpo = {
-                            "data": data_iso,
-                            "turno": turno_num,
-                            "cais": str(row_dict.get("Cais", row_dict.get("CAIS", row_dict.get(0, "-")))),
-                            "navio": str(row_dict.get("Navio", row_dict.get("NAVIO", row_dict.get(1, "-")))),
-                            "operador": str(row_dict.get("Operador", row_dict.get("OPERADOR", row_dict.get(2, "-"))))
-                        }
-                        
-                        if registro_limpo["navio"] != "-" and registro_limpo["navio"] != "":
-                            registros_formatados.append({"dados": registro_limpo})
+                    if registro_limpo["navio"] != "-" and registro_limpo["navio"] != "":
+                        registros_formatados.append({"dados": registro_limpo})
 
-                    if registros_formatados:
-                        supabase.table("escala_estiva").upsert(registros_formatados).execute()
-                        print(f"  -> Turno {turno_num} salvo com sucesso.")
-        except Exception as e:
-            continue
+                if registros_formatados:
+                    supabase.table("escala_estiva").upsert(registros_formatados).execute()
+                    print(f"  -> Turno {turno_num} salvo com sucesso.")
+    except Exception as e:
+        print(f"  -> Erro no turno {turno_num}: {e}")
 
-        # Pausa de 2.5 segundos entre cada requisição para o servidor do OGMO respirar sossegado (totalizando uns minutinhos de descanso para você e zero chances de estresse com bloqueio)
-        time.sleep(2.5)
+    time.sleep(2.5)
 
-print("\n🚀 Carga histórica concluída com sucesso!")
+print("\n🚀 Atualização diária concluída!")
