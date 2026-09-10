@@ -1,0 +1,30 @@
+name: Atualizar Escala OGMO
+
+on:
+  schedule:
+    # Roda todos os dias às 6h da manhã e às 14h (horário UTC, ajuste conforme necessário)
+    - cron: '0 9,17 * * *'
+  workflow_dispatch: # Permite rodar manualmente pelo site do GitHub
+
+jobs:
+  run-scraper:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Copiar código do repositório
+        uses: actions/checkout@v3
+
+      - name: Configurar ambiente Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Instalar dependências
+        run: |
+          pip install requests pandas beautifulsoup4 lxml supabase
+
+      - name: Executar script de extração
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: |
+          python fsdfs.py
