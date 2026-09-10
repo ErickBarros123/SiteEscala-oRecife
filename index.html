@@ -76,7 +76,7 @@
             const turnoSel = document.getElementById('select-turno').value;
 
             window.history.replaceState({}, '', `${window.location.pathname}?d=${dataSel}&t=${turnoSel}`);
-            document.getElementById('subtituloinnerText', `Exibindo dados para a data ${dataSel} - Turno ${turnoSel}`);
+            document.getElementById('subtitulo').innerText = `Exibindo dados para a data ${dataSel} - Turno ${turnoSel}`;
 
             const loadingEl = document.getElementById('loading');
             const containerEl = document.getElementById('tabela-container');
@@ -86,26 +86,20 @@
             containerEl.classList.add('hidden');
 
             try {
+                // Consulta filtrada diretamente no Supabase usando o campo JSONB
                 const { data, error } = await supabaseClient
                     .from('escala_estiva')
-                    .select('dados');
+                    .select('dados')
+                    .contains('dados', { data: dataSel, turno: String(turnoSel) });
 
                 if (error) throw error;
 
                 if (!data || data.length === 0) {
-                    loadingEl.innerHTML = '<p class="text-gray-500">Nenhuma escala cadastrada no banco de dados.</p>';
+                    loadingEl.innerHTML = `<p class="text-gray-500">Nenhum registro encontrado para o Turno ${turnoSel} na data ${dataSel}.</p>`;
                     return;
                 }
 
-                // Filtra exatamente pela data e turno armazenados no JSON
-                const registros = data
-                    .map(item => item.dados)
-                    .filter(reg => reg.data === dataSel && String(reg.turno) === String(turnoSel));
-
-                if (registros.length === 0) {
-                    loadingEl.innerHTML = `<p class="text-gray-500">Nenhum registro encontrado para o Turno ${turnoSel} na data ${dataSel}. (Execute o GitHub Actions para popular essa data)</p>`;
-                    return;
-                }
+                const registros = data.map(item => item.dados);
 
                 bodyEl.innerHTML = registros.map((reg, index) => {
                     const bgClass = index % 2 === 0 ? 'bg-white' : 'bg-gray-50';
