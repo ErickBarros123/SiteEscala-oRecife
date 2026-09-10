@@ -2,7 +2,7 @@ name: Atualizar Escala OGMO
 
 on:
   schedule:
-    - cron: '0 9 * * *' # Roda todo dia às 09:00 UTC (06:00 horário de Brasília)
+    - cron: '15 7,13,19,1 * * *'
   workflow_dispatch: # Permite rodar manualmente também pelo botão no GitHub
 
 jobs:
