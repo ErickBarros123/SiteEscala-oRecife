@@ -3,42 +3,48 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Escala da Estiva - OGMO Recife</title>
-    <!-- Tailwind CSS para estilização moderna -->
+    <title>Escala - OGMO Suape / Recife</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Supabase JS Client -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body class="bg-gray-50 min-h-screen text-gray-800">
 
     <div class="max-w-7xl mx-auto px-4 py-8">
-        <!-- Cabeçalho -->
         <header class="bg-white shadow rounded-lg p-6 mb-8 flex flex-col md:flex-row justify-between items-center">
             <div>
-                <h1 class="text-2xl font-bold text-blue-900">🚢 Escala da Estiva - OGMO Recife</h1>
-                <p class="text-sm text-gray-500 mt-1">Dados atualizados automaticamente via GitHub Actions e Supabase</p>
+                <h1 class="text-2xl font-bold text-blue-900">🚢 Consulta de Escala por Data e Turno</h1>
+                <p id="subtitulo" class="text-sm text-gray-500 mt-1">Carregando parâmetros da URL...</p>
             </div>
-            <div class="mt-4 md:mt-0">
-                <button onclick="carregarEscala()" class="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-lg transition shadow">
-                    🔄 Atualizar Dados
+            <div class="mt-4 md:mt-0 flex gap-2">
+                <input type="date" id="input-data" class="border rounded-lg px-3 py-2 text-sm">
+                <select id="select-turno" class="border rounded-lg px-3 py-2 text-sm">
+                    <option value="1">Turno 1</option>
+                    <option value="2">Turno 2</option>
+                    <option value="3">Turno 3</option>
+                    <option value="4">Turno 4</option>
+                </select>
+                <button onclick="aplicarFiltro()" class="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-lg transition shadow text-sm">
+                    Filtrar
                 </button>
             </div>
         </header>
 
-        <!-- Status / Carregamento -->
         <div id="loading" class="text-center py-12">
-            <p class="text-lg text-gray-600 animate-pulse">Carregando a escala mais recente...</p>
+            <p class="text-lg text-gray-600 animate-pulse">Buscando dados...</p>
         </div>
 
-        <!-- Tabela de Exibição -->
         <div id="tabela-container" class="bg-white shadow rounded-lg overflow-hidden hidden">
             <div class="overflow-x-auto">
-                <table id="tabela-escala" class="min-w-full divide-y divide-gray-200">
-                    <thead class="bg-blue-900 text-white" id="tabela-head">
-                        <!-- Cabeçalho dinâmico preenchido via JS -->
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-blue-900 text-white">
+                        <tr>
+                            <th class="px-6 py-3 text-left font-semibold uppercase tracking-wider text-xs">Período / Turno</th>
+                            <th class="px-6 py-3 text-left font-semibold uppercase tracking-wider text-xs">Cais</th>
+                            <th class="px-6 py-3 text-left font-semibold uppercase tracking-wider text-xs">Navio</th>
+                            <th class="px-6 py-3 text-left font-semibold uppercase tracking-wider text-xs">Operador</th>
+                        </tr>
                     </thead>
                     <tbody class="bg-white divide-y divide-gray-200 text-sm" id="tabela-body">
-                        <!-- Linhas preenchidas via JS -->
                     </tbody>
                 </table>
             </div>
@@ -46,27 +52,41 @@
     </div>
 
     <script>
-        // Configuração pública do Supabase (A chave anon/public é segura para o front-end)
         const SUPABASE_URL = 'https://hpmooxppchdkicdlrjll.supabase.co';
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhwbW9veHBwY2hka2ljZGxyamxsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkwNTA4MTksImV4cCI6MjEwNDYyNjgxOX0.CeS4GBDhdbpZLTiWOTijuGw7SQkjD8eYvK_E-bBp3y4';
 
         const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+        const params = new URLSearchParams(window.location.search);
+        const dataUrl = params.get('d');
+        const turnoUrl = params.get('t');
+
+        const hoje = new Date().toISOString().split('T')[0];
+        document.getElementById('input-data').value = dataUrl || hoje;
+        if (turnoUrl) {
+            document.getElementById('select-turno').value = turnoUrl;
+        }
+
         async function carregarEscala() {
+            const dataSelecionada = document.getElementById('input-data').value;
+            const turnoSelecionado = document.getElementById('select-turno').value;
+
+            const novaUrl = `${window.location.pathname}?d=${dataSelecionada}&t=${turnoSelecionado}`;
+            window.history.replaceState({}, '', novaUrl);
+
+            document.getElementById('subtitulo').innerText = `Exibindo dados para a data ${dataSelecionada} - Turno ${turnoSelecionado}`;
+
             const loadingEl = document.getElementById('loading');
             const containerEl = document.getElementById('tabela-container');
-            const headEl = document.getElementById('tabela-head');
             const bodyEl = document.getElementById('tabela-body');
 
             loadingEl.style.display = 'block';
             containerEl.classList.add('hidden');
 
             try {
-                // Busca os registros salvos na tabela escala_estiva
                 const { data, error } = await supabaseClient
                     .from('escala_estiva')
-                    .select('dados')
-                    .limit(100); // Ajuste o limite se necessário
+                    .select('dados');
 
                 if (error) throw error;
 
@@ -75,19 +95,28 @@
                     return;
                 }
 
-                // Extrai as linhas do objeto JSON salvo
-                const registros = data.map(item => item.dados);
-                const colunas = Object.keys(registros[0]);
+                const registros = data
+                    .map(item => item.dados)
+                    .filter(reg => {
+                        const periodoStr = String(reg.periodo || '');
+                        return periodoStr.includes(turnoSelecionado);
+                    });
 
-                // Monta o cabeçalho da tabela
-                headEl.innerHTML = `<tr class="text-left">${colunas.map(col => `<th class="px-6 py-3 font-semibold uppercase tracking-wider">${col}</th>`).join('')}</tr>`;
+                if (registros.length === 0) {
+                    loadingEl.innerHTML = `<p class="text-gray-500">Nenhum registro encontrado para o Turno ${turnoSelecionado} na data selecionada.</p>`;
+                    return;
+                }
 
-                // Monta o corpo da tabela
                 bodyEl.innerHTML = registros.map((reg, index) => {
                     const bgClass = index % 2 === 0 ? 'bg-white' : 'bg-gray-50';
-                    return `<tr class="${bgClass} hover:bg-blue-50 transition">
-                        ${colunas.map(col => `<td class="px-6 py-4 whitespace-nowrap text-gray-700">${reg[col] !== undefined ? reg[col] : ''}</td>`).join('')}
-                    </tr>`;
+                    return `
+                        <tr class="${bgClass} hover:bg-blue-50 transition">
+                            <td class="px-6 py-4 whitespace-nowrap text-gray-700 font-medium">Turno ${turnoSelecionado}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-gray-700">${reg.cais || '-'}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-gray-900 font-semibold">${reg.navio || '-'}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-gray-600">${reg.operador || '-'}</td>
+                        </tr>
+                    `;
                 }).join('');
 
                 loadingEl.style.display = 'none';
@@ -99,7 +128,10 @@
             }
         }
 
-        // Executa ao carregar a página
+        function aplicarFiltro() {
+            carregarEscala();
+        }
+
         carregarEscala();
     </script>
 </body>
