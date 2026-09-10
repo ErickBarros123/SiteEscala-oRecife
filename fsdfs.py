@@ -68,4 +68,4 @@ for periodo in periodos:
     else:
         print(f"❌ Erro de conexão com o OGMO no período {periodo}.")
 
-print("🚀 Varredura concluída!")
+print("🚀 Varredura concluída!")  
