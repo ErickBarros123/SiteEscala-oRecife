@@ -13,18 +13,21 @@ if not SUPABASE_URL or not SUPABASE_KEY:
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# Data atual no formato YYYY-MM-DD exigido pelo novo site do Suape
-data_atual = datetime.now().strftime("%Y-%m-%d")
+url_ogmo = "http://www.ogmo-recife.org.br/EscalaNet/RelatorioResultadoEscala.php"
+data_atual = datetime.now().strftime("%d/%m/%Y")
+data_iso = datetime.now().strftime("%Y-%m-%d") # Formato YYYY-MM-DD para bater com a URL
+periodos = {"46": "1", "47": "2", "48": "3", "49": "4"} # Mapeia os períodos para os turnos 1, 2, 3, 4
 
-# Turnos que deseja consultar (ex: 1, 2, 3, etc.)
-turnos = ["1", "2", "3", "4"]
-
-for turno in turnos:
-    url_suape = f"http://tpa.ogmosuape.com.br/web/listagem_turno?d={data_atual}&t={turno}"
-    print(f"⏳ Buscando dados do OGMO Suape para a data {data_atual} (Turno {turno})...")
+for periodo, turno_num in periodos.items():
+    print(f"⏳ Buscando dados do OGMO para a data {data_atual} (Período {periodo} / Turno {turno_num})...")
     
-    # Como o novo endpoint utiliza GET com parâmetros na URL
-    resposta = requests.get(url_suape)
+    dados_post = {
+        "categoria": "01",
+        "data": data_atual, 
+        "periodo": periodo
+    }
+    
+    resposta = requests.post(url_ogmo, data=dados_post)
 
     if resposta.status_code == 200:
         html_io = io.StringIO(resposta.text)
@@ -40,9 +43,9 @@ for turno in turnos:
                 for _, row in df.iterrows():
                     row_dict = row.to_dict()
                     
-                    # Padroniza as chaves para salvar no Supabase
                     registro_limpo = {
-                        "periodo": f"Turno {turno}",
+                        "data": data_iso, # Salva a data limpa (ex: 2026-09-10)
+                        "turno": turno_num, # Salva o número do turno (1, 2, 3, 4)
                         "cais": str(row_dict.get("Cais", row_dict.get("CAIS", row_dict.get(0, "-")))),
                         "navio": str(row_dict.get("Navio", row_dict.get("NAVIO", row_dict.get(1, "-")))),
                         "operador": str(row_dict.get("Operador", row_dict.get("OPERADOR", row_dict.get(2, "-"))))
@@ -52,17 +55,17 @@ for turno in turnos:
                         registros_formatados.append({"dados": registro_limpo})
 
                 if registros_formatados:
-                    print(f"☁️ Salvando dados do Turno {turno} no Supabase...")
+                    print(f"☁️ Salvando dados do Turno {turno_num} no Supabase...")
                     supabase.table("escala_estiva").upsert(registros_formatados).execute()
-                    print(f"✅ Turno {turno} salvo com sucesso!")
+                    print(f"✅ Turno {turno_num} salvo com sucesso!")
                 else:
-                    print(f"⚠️ Nenhum registro válido no Turno {turno}.")
+                    print(f"⚠️ Nenhum registro válido no Turno {turno_num}.")
             else:
-                print(f"⚠️ Nenhuma tabela encontrada para o Turno {turno}.")
+                print(f"⚠️ Nenhuma tabela encontrada para o período {periodo}.")
                 
         except Exception as e:
-            print(f"❌ Erro ao processar o Turno {turno}: {e}")
+            print(f"❌ Erro ao processar o período {periodo}: {e}")
     else:
-        print(f"❌ Erro de conexão com o OGMO Suape no Turno {turno}. Código: {resposta.status_code}")
+        print(f"❌ Erro de conexão com o OGMO no período {periodo}.")
 
-print("🚀 Varredura do Suape concluída!")
+print("🚀 Varredura concluída!")
