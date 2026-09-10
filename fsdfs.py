@@ -5,19 +5,16 @@ import io
 from datetime import datetime
 from supabase import create_client, Client
 
-# --- CONFIGURAÇÕES DO SUPABASE ---
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
 
 if not SUPABASE_URL or not SUPABASE_KEY:
-    raise ValueError("❌ As variáveis de ambiente SUPABASE_URL e SUPABASE_KEY não foram configuradas!")
+    raise ValueError("❌ As variáveis SUPABASE_URL e SUPABASE_KEY não foram configuradas!")
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 url_ogmo = "http://www.ogmo-recife.org.br/EscalaNet/RelatorioResultadoEscala.php"
 data_atual = datetime.now().strftime("%d/%m/%Y")
-
-# Lista com os períodos que você deseja buscar
 periodos = ["46", "47", "48", "49"]
 
 for periodo in periodos:
@@ -41,20 +38,34 @@ for periodo in periodos:
                 df = tabelas[0] 
                 df = df.fillna("")
                 
-                # Opcional: Adicionar a coluna de período para identificar de qual turno é o dado
-                df["periodo_escala"] = periodo
-                
-                registros = [{"dados": row} for row in df.to_dict(orient="records")]
-                
-                print(f"☁️ Salvando dados do período {periodo} no Supabase...")
-                response = supabase.table("escala_estiva").upsert(registros).execute()
-                print(f"✅ Período {periodo} salvo com sucesso!")
+                # Normaliza as colunas para garantir que o front-end encontre Navio, Cais, Operador
+                registros_formatados = []
+                for _, row in df.iterrows():
+                    row_dict = row.to_dict()
+                    
+                    # Padroniza as chaves independentemente de como venham do HTML do OGMO
+                    registro_limpo = {
+                        "periodo": periodo,
+                        "cais": str(row_dict.get("Cais", row_dict.get("CAIS", row_dict.get(0, "-")))),
+                        "navio": str(row_dict.get("Navio", row_dict.get("NAVIO", row_dict.get(1, "-")))),
+                        "operador": str(row_dict.get("Operador", row_dict.get("OPERADOR", row_dict.get(2, "-"))))
+                    }
+                    
+                    if registro_limpo["navio"] != "-" and registro_limpo["navio"] != "":
+                        registros_formatados.append({"dados": registro_limpo})
+
+                if registros_formatados:
+                    print(f"☁️ Salvando dados do período {periodo} no Supabase...")
+                    supabase.table("escala_estiva").upsert(registros_formatados).execute()
+                    print(f"✅ Período {periodo} salvo com sucesso!")
+                else:
+                    print(f"⚠️ Nenhum registro válido no período {periodo}.")
             else:
                 print(f"⚠️ Nenhuma tabela encontrada para o período {periodo}.")
                 
         except Exception as e:
             print(f"❌ Erro ao processar o período {periodo}: {e}")
     else:
-        print(f"❌ Erro de conexão com o OGMO no período {periodo}. Código: {resposta.status_code}")
+        print(f"❌ Erro de conexão com o OGMO no período {periodo}.")
 
-print("🚀 Processo de varredura de todos os períodos concluído!")
+print("🚀 Varredura concluída!")
