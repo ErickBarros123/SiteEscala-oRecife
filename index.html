@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Escala da Estiva - OGMO Recife</title>
-    <!-- Tailwind CSS para estilização moderna -->
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Supabase JS Client -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -33,9 +33,14 @@
         <!-- Tabela de Exibição -->
         <div id="tabela-container" class="bg-white shadow rounded-lg overflow-hidden hidden">
             <div class="overflow-x-auto">
-                <table id="tabela-escala" class="min-w-full divide-y divide-gray-200">
-                    <thead class="bg-blue-900 text-white" id="tabela-head">
-                        <!-- Cabeçalho dinâmico preenchido via JS -->
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-blue-900 text-white">
+                        <tr>
+                            <th class="px-6 py-3 text-left font-semibold uppercase tracking-wider text-xs">Período</th>
+                            <th class="px-6 py-3 text-left font-semibold uppercase tracking-wider text-xs">Cais</th>
+                            <th class="px-6 py-3 text-left font-semibold uppercase tracking-wider text-xs">Navio</th>
+                            <th class="px-6 py-3 text-left font-semibold uppercase tracking-wider text-xs">Operador</th>
+                        </tr>
                     </thead>
                     <tbody class="bg-white divide-y divide-gray-200 text-sm" id="tabela-body">
                         <!-- Linhas preenchidas via JS -->
@@ -46,7 +51,6 @@
     </div>
 
     <script>
-        // Configuração pública do Supabase (A chave anon/public é segura para o front-end)
         const SUPABASE_URL = 'https://hpmooxppchdkicdlrjll.supabase.co';
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhwbW9veHBwY2hka2ljZGxyamxsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkwNTA4MTksImV4cCI6MjEwNDYyNjgxOX0.CeS4GBDhdbpZLTiWOTijuGw7SQkjD8eYvK_E-bBp3y4';
 
@@ -55,18 +59,16 @@
         async function carregarEscala() {
             const loadingEl = document.getElementById('loading');
             const containerEl = document.getElementById('tabela-container');
-            const headEl = document.getElementById('tabela-head');
             const bodyEl = document.getElementById('tabela-body');
 
             loadingEl.style.display = 'block';
             containerEl.classList.add('hidden');
 
             try {
-                // Busca os registros salvos na tabela escala_estiva
                 const { data, error } = await supabaseClient
                     .from('escala_estiva')
                     .select('dados')
-                    .limit(100); // Ajuste o limite se necessário
+                    .limit(200);
 
                 if (error) throw error;
 
@@ -75,19 +77,43 @@
                     return;
                 }
 
-                // Extrai as linhas do objeto JSON salvo
-                const registros = data.map(item => item.dados);
-                const colunas = Object.keys(registros[0]);
+                // Extrai e limpa os dados removendo duplicatas exatas baseadas no conteúdo JSON convertido em string
+                const itensBrutos = data.map(item => item.dados);
+                const unicosMap = new Map();
 
-                // Monta o cabeçalho da tabela
-                headEl.innerHTML = `<tr class="text-left">${colunas.map(col => `<th class="px-6 py-3 font-semibold uppercase tracking-wider">${col}</th>`).join('')}</tr>`;
+                itensBrutos.forEach(reg => {
+                    // Tenta mapear colunas comuns independentemente de letras maiúsculas/minúsculas
+                    const periodo = reg['periodo_escala'] || reg['Periodo'] || reg['período'] || '-';
+                    const cais = reg['Cais'] || reg['CAIS'] || reg['cais'] || '-';
+                    const navio = reg['Navio'] || reg['NAVIO'] || reg['navio'] || '-';
+                    const operador = reg['Operador'] || reg['OPERADOR'] || reg['operador'] || '-';
 
-                // Monta o corpo da tabela
+                    // Chave única para evitar repetição idêntica
+                    const chaveUnica = `${periodo}-${cais}-${navio}-${operador}`;
+                    
+                    if (!unicosMap.has(chaveUnica) && navio !== '-') {
+                        unicosMap.set(chaveUnica, { periodo, cais, navio, operador });
+                    }
+                });
+
+                const registros = Array.from(unicosMap.values());
+
+                if (registros.length === 0) {
+                    loadingEl.innerHTML = '<p class="text-gray-500">Nenhum dado válido encontrado para exibição.</p>';
+                    return;
+                }
+
+                // Monta o corpo da tabela de forma limpa
                 bodyEl.innerHTML = registros.map((reg, index) => {
                     const bgClass = index % 2 === 0 ? 'bg-white' : 'bg-gray-50';
-                    return `<tr class="${bgClass} hover:bg-blue-50 transition">
-                        ${colunas.map(col => `<td class="px-6 py-4 whitespace-nowrap text-gray-700">${reg[col] !== undefined ? reg[col] : ''}</td>`).join('')}
-                    </tr>`;
+                    return `
+                        <tr class="${bgClass} hover:bg-blue-50 transition">
+                            <td class="px-6 py-4 whitespace-nowrap text-gray-700 font-medium">${reg.periodo}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-gray-700">${reg.cais}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-gray-900 font-semibold">${reg.navio}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-gray-600">${reg.operador}</td>
+                        </tr>
+                    `;
                 }).join('');
 
                 loadingEl.style.display = 'none';
@@ -99,7 +125,6 @@
             }
         }
 
-        // Executa ao carregar a página
         carregarEscala();
     </script>
 </body>
